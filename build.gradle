@@ -73,6 +73,8 @@ dependencies {
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.1'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    testImplementation 'jfree:jfreechart:1.0.13'
 }
 
 test {
@@ -104,4 +106,10 @@ wpi.java.configureTestTasks(test)
 // Configure string concat to always inline compile
 tasks.withType(JavaCompile) {
     options.compilerArgs.add '-XDstringConcat=inline'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    // Pass the test results directory to the test environment
+    systemProperty 'junit.output.dir', "${buildDir}/test-results/test"
 }
