@@ -132,10 +132,6 @@ public class TankDriveSubsystem extends SubsystemBase {
 
     @Override
     public void periodic() {
-        DebugUtil.Publish("LeftEnc", m_leftEncoder.getDistance());
-        DebugUtil.Publish("RightEnc", m_rightEncoder.getDistance());
-        DebugUtil.Publish("GyroRot", m_gyro.getRotation2d().getDegrees());
-
         // 1. Always update odometry with current sensor reads (handles real robot and sim variables seamlessly)
         m_odometry.update(
                 m_gyro.getRotation2d(),
@@ -209,9 +205,6 @@ public class TankDriveSubsystem extends SubsystemBase {
         var leftVoltage = m_leftLeader.get() * RobotController.getBatteryVoltage();
         var rightVoltage = m_rightLeader.get() * RobotController.getBatteryVoltage();
 
-        DebugUtil.Publish("Left Voltage", leftVoltage);
-        DebugUtil.Publish("Right Voltage", rightVoltage);
-
         m_drivetrainSim.setInputs(
                 leftVoltage,
                 rightVoltage
@@ -219,15 +212,10 @@ public class TankDriveSubsystem extends SubsystemBase {
 
         m_drivetrainSim.update(0.020);
 
-        DebugUtil.Publish("DriveSimRot", -m_drivetrainSim.getHeading().getDegrees());
-        DebugUtil.Publish("DriveSimPoseRot", -m_drivetrainSim.getPose().getRotation().getDegrees());
-
         // 2. Sync the simulated gyro register with physics
         m_gyroSim.setAngle(-m_drivetrainSim.getHeading().getDegrees());
         m_leftEncoderSim.setDistance(m_drivetrainSim.getLeftPositionMeters());
         m_rightEncoderSim.setDistance(m_drivetrainSim.getRightPositionMeters());
-
-        DebugUtil.Publish("GyroRotSim", m_gyroSim.getAngle());
 
         // 3. Directly extract the true 2D simulation pose coordinate frame and overwrite our state variable
         m_field.setRobotPose(m_drivetrainSim.getPose());
@@ -245,10 +233,6 @@ public class TankDriveSubsystem extends SubsystemBase {
     {
         return this.runEnd(
                 () -> {
-
-                    DebugUtil.Publish("Forward", speed.getAsDouble());
-                    DebugUtil.Publish("Rot", rotation.getAsDouble());
-
             arcadeDrive(
                     speed.getAsDouble(),
                     rotation.getAsDouble()
