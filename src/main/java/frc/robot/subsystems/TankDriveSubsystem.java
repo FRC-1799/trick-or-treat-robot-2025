@@ -57,7 +57,7 @@ public class TankDriveSubsystem extends SubsystemBase {
     private double m_rightPositionMeters = 0.0;
 
     // Gyro Stablized Drive
-    private final PIDController m_ratePid = new PIDController(0.01, 0.0, 0.00);
+    private final PIDController m_ratePid = new PIDController(0.01, 0.01, 0.0);
     private final double kMaxTurnRateDegPerSec = 180.0;
     private double m_targetHeading;
 
