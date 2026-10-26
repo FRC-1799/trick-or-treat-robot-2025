@@ -7,6 +7,7 @@ package frc.robot;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import frc.robot.Constants.OperatorConstants;
 import frc.robot.subsystems.TankDriveSubsystem;
+import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
@@ -25,6 +26,7 @@ public class RobotContainer {
   public final TankDriveSubsystem tankDriveSubsystem = new TankDriveSubsystem();
 
   private final CommandXboxController xbox1 = new CommandXboxController(0);
+
 
   /** The container for the robot. Contains subsystems, OI devices, and commands.
    * Singleton
@@ -61,7 +63,7 @@ public class RobotContainer {
             },
             () -> {
               var p = config.getTurnAxisPower();
-              return -MathUtilExt.axisPowerCurve(xbox1.getRightTriggerAxis(), p.exponent(), p.deadzone(), p.maxPower());
+              return -MathUtilExt.axisPowerCurve(xbox1.getRightX(), p.exponent(), p.deadzone(), p.maxPower());
             }
     ));
   }
