@@ -44,15 +44,15 @@ public class TankDriveSubsystem extends SubsystemBase {
     private final double kTrackWidthMeters = Meters.convertFrom(24.0, Inches);
     // Left side controllers
     private final WPI_VictorSPX m_leftLeader;
-    private final WPI_VictorSPX m_leftFollower;
+    //private final WPI_VictorSPX m_leftFollower;
     // Right side controllers
     private final WPI_VictorSPX m_rightLeader;
-    private final WPI_VictorSPX m_rightFollower;
+    //private final WPI_VictorSPX m_rightFollower;
     // WPILib DifferentialDrive wrapper
     private final DifferentialDriveOdometry m_odometry;
     private final DifferentialDrive m_drive;
     private final Field2d m_field = new Field2d();
-    private final ADXRS450_Gyro m_gyro = new ADXRS450_Gyro(SPI.Port.kMXP);
+    private final ADXRS450_Gyro m_gyro = new ADXRS450_Gyro(SPI.Port.kOnboardCS1);
     private boolean gyroCalibrated = true;
     // Telemetry Trackers
     private final Pose2d m_robotPose = new Pose2d(); // Storage variable for our tracking state
@@ -71,19 +71,19 @@ public class TankDriveSubsystem extends SubsystemBase {
     public TankDriveSubsystem() {
         // 1. Initialize the motor controllers with their respective CAN IDs
         m_leftLeader = new WPI_VictorSPX(1);
-        m_leftFollower = new WPI_VictorSPX(3);
+        //m_leftFollower = new WPI_VictorSPX(3);
         m_rightLeader = new WPI_VictorSPX(2);
-        m_rightFollower = new WPI_VictorSPX(4);
+        //m_rightFollower = new WPI_VictorSPX(4);
 
         // 2. Factory default all controllers to avoid leftover configuration bugs
         m_leftLeader.configFactoryDefault();
-        m_leftFollower.configFactoryDefault();
+        //m_leftFollower.configFactoryDefault();
         m_rightLeader.configFactoryDefault();
-        m_rightFollower.configFactoryDefault();
+        //m_rightFollower.configFactoryDefault();
 
         // 3. Set up hardware-level follower mode
-        m_leftFollower.follow(m_leftLeader);
-        m_rightFollower.follow(m_rightLeader);
+        //m_leftFollower.follow(m_leftLeader);
+        //m_rightFollower.follow(m_rightLeader);
 
         // 4. Configure motor inversion rules
         // Invert one complete side so that identical inputs drive the robot straight forward
@@ -91,8 +91,8 @@ public class TankDriveSubsystem extends SubsystemBase {
         m_rightLeader.setInverted(true);
 
         // Ensure followers perfectly mirror their designated leader's orientation
-        m_leftFollower.setInverted(InvertType.FollowMaster);
-        m_rightFollower.setInverted(InvertType.FollowMaster);
+        //m_leftFollower.setInverted(InvertType.FollowMaster);
+       // m_rightFollower.setInverted(InvertType.FollowMaster);
 
         // 5. Instantiate DifferentialDrive using functional lambdas pointing to the leaders
         m_drive = new DifferentialDrive(m_leftLeader::set, m_rightLeader::set);
@@ -274,15 +274,17 @@ public class TankDriveSubsystem extends SubsystemBase {
     public Command arcadeDriveCommand(DoubleSupplier speed, DoubleSupplier rotation) {
         return this.runEnd(
                 () -> {
-                    if(!gyroCalibrated) {
-                        m_drive.arcadeDrive(0.0, 0.0);
-                        return;
-                    }
+
 
                     if (config.getDirectionCorrection()) {
                         double xSpeed = speed.getAsDouble();
                         double joystickTurnInput = rotation.getAsDouble();
                         double zRotationCorrection = joystickTurnInput;
+                        
+                        if(!gyroCalibrated) {
+                            m_drive.arcadeDrive(0.0, 0.0);
+                            return;
+                        }
 
                         if(Math.abs(xSpeed) > 0.01) {
                             if (Math.abs(joystickTurnInput) < 0.05) {
