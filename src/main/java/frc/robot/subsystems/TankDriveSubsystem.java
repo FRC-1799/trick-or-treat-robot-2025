@@ -12,11 +12,12 @@ import edu.wpi.first.math.numbers.N2;
 import edu.wpi.first.math.system.LinearSystem;
 import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.math.system.plant.LinearSystemId;
-import edu.wpi.first.wpilibj.AnalogGyro;
+import edu.wpi.first.wpilibj.ADXRS450_Gyro;
 import edu.wpi.first.wpilibj.RobotBase;
 import edu.wpi.first.wpilibj.RobotController;
+import edu.wpi.first.wpilibj.SPI;
 import edu.wpi.first.wpilibj.drive.DifferentialDrive;
-import edu.wpi.first.wpilibj.simulation.AnalogGyroSim;
+import edu.wpi.first.wpilibj.simulation.ADXRS450_GyroSim;
 import edu.wpi.first.wpilibj.simulation.DifferentialDrivetrainSim;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -31,34 +32,30 @@ import static edu.wpi.first.units.Units.Inches;
 import static edu.wpi.first.units.Units.Meters;
 
 public class TankDriveSubsystem extends SubsystemBase {
-    private RobotPreferences config = RobotPreferences.getInstance();
-
     private final double kTrackWidthMeters = Meters.convertFrom(24.0, Inches);
-
     // Left side controllers
     private final WPI_VictorSPX m_leftLeader;
     private final WPI_VictorSPX m_leftFollower;
-
     // Right side controllers
     private final WPI_VictorSPX m_rightLeader;
     private final WPI_VictorSPX m_rightFollower;
-
     // WPILib DifferentialDrive wrapper
     private final DifferentialDriveOdometry m_odometry;
     private final DifferentialDrive m_drive;
     private final Field2d m_field = new Field2d();
-    private final AnalogGyro m_gyro = new AnalogGyro(0);
+    private final ADXRS450_Gyro m_gyro = new ADXRS450_Gyro(SPI.Port.kMXP);
     // Telemetry Trackers
     private final Pose2d m_robotPose = new Pose2d(); // Storage variable for our tracking state
+    // Gyro Stablized Drive
+    private final PIDController turnCorrectionForward = new PIDController(0.01, 0.01, 0.0);
+    private final PIDController turnCorrectionReverse = new PIDController(0.01, 0.01, 0.0);
+    private final double kMaxTurnRateDegPerSec = 180.0;
+    private final RobotPreferences config = RobotPreferences.getInstance();
     // Simulation Engines
     private DifferentialDrivetrainSim m_drivetrainSim;
-    private AnalogGyroSim m_gyroSim;
+    private ADXRS450_GyroSim m_gyroSim;
     private double m_leftPositionMeters = 0.0;
     private double m_rightPositionMeters = 0.0;
-
-    // Gyro Stablized Drive
-    private final PIDController m_ratePid = new PIDController(0.01, 0.01, 0.0);
-    private final double kMaxTurnRateDegPerSec = 180.0;
     private double m_targetHeading;
 
     public TankDriveSubsystem() {
@@ -194,7 +191,7 @@ public class TankDriveSubsystem extends SubsystemBase {
                 VecBuilder.fill(0.001, 0.001, 0.001, 0.1, 0.1, 0.005, 0.005)
         );
 
-        m_gyroSim = new AnalogGyroSim(m_gyro);
+        m_gyroSim = new ADXRS450_GyroSim(m_gyro);
     }
 
     //
@@ -263,26 +260,31 @@ public class TankDriveSubsystem extends SubsystemBase {
     public Command arcadeDriveCommand(DoubleSupplier speed, DoubleSupplier rotation) {
         return this.runEnd(
                 () -> {
-                    if(config.getDirectionCorrection()) {
-                    double xSpeed = speed.getAsDouble();
-                    double joystickTurnInput = rotation.getAsDouble();
+                    if (config.getDirectionCorrection()) {
+                        double xSpeed = speed.getAsDouble();
+                        double joystickTurnInput = rotation.getAsDouble();
+                        double zRotationCorrection = joystickTurnInput;
 
+                        if(Math.abs(xSpeed) > 0.01) {
+                            if (Math.abs(joystickTurnInput) < 0.05) {
+                                joystickTurnInput = 0.0;
+                            }
 
-                        if (Math.abs(joystickTurnInput) < 0.05) {
-                            joystickTurnInput = 0.0;
+                            // Map the joystick input (-1.0 to 1.0) to a target turn rate (e.g., -180 to 180 deg/sec)
+                            double targetTurnRate = joystickTurnInput * kMaxTurnRateDegPerSec;
+
+                            // Get the robot's actual turning rate from the gyro
+                            double currentTurnRate = -m_gyro.getRate();
+
+                            DebugUtil.Publish("GyroTurn", currentTurnRate);
+
+                            // The PID calculates a motor correction value (-1.0 to 1.0) to achieve that rate
+                            if(xSpeed > 0.0) {
+                                zRotationCorrection = turnCorrectionForward.calculate(currentTurnRate, targetTurnRate);
+                            } else {
+                                zRotationCorrection = turnCorrectionReverse.calculate(currentTurnRate, targetTurnRate);
+                            }
                         }
-
-                        // Map the joystick input (-1.0 to 1.0) to a target turn rate (e.g., -180 to 180 deg/sec)
-                        double targetTurnRate = joystickTurnInput * kMaxTurnRateDegPerSec;
-
-                        // Get the robot's actual turning rate from the gyro
-                        double currentTurnRate = -m_gyro.getRate();
-
-                        DebugUtil.Publish("GyroTurn", currentTurnRate);
-
-                        // The PID calculates a motor correction value (-1.0 to 1.0) to achieve that rate
-                        double zRotationCorrection = m_ratePid.calculate(currentTurnRate, targetTurnRate);
-
                         // Pass the combined forward speed and the PID's output directly to arcadeDrive
                         m_drive.arcadeDrive(xSpeed, zRotationCorrection);
                     } else {
