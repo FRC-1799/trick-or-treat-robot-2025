@@ -12,6 +12,9 @@ import edu.wpi.first.math.numbers.N2;
 import edu.wpi.first.math.system.LinearSystem;
 import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.math.system.plant.LinearSystemId;
+import edu.wpi.first.networktables.BooleanPublisher;
+import edu.wpi.first.networktables.NetworkTableInstance;
+import edu.wpi.first.networktables.PubSubOption;
 import edu.wpi.first.wpilibj.ADXRS450_Gyro;
 import edu.wpi.first.wpilibj.RobotBase;
 import edu.wpi.first.wpilibj.RobotController;
@@ -22,16 +25,22 @@ import edu.wpi.first.wpilibj.simulation.DifferentialDrivetrainSim;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.Commands;
+import edu.wpi.first.wpilibj2.command.Subsystem;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.RobotPreferences;
-import frc.robot.util.DebugUtil;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.function.DoubleSupplier;
 
 import static edu.wpi.first.units.Units.Inches;
 import static edu.wpi.first.units.Units.Meters;
 
 public class TankDriveSubsystem extends SubsystemBase {
+
+    BooleanPublisher gyroOnline = NetworkTableInstance.getDefault().getBooleanTopic("DriveSubsystem/Gyro Online").publish(PubSubOption.periodic(0.1));
+    BooleanPublisher gyroCalibrating = NetworkTableInstance.getDefault().getBooleanTopic("DriveSubsystem/Gyro Calibrating").publish(PubSubOption.periodic(0.1));
+
     private final double kTrackWidthMeters = Meters.convertFrom(24.0, Inches);
     // Left side controllers
     private final WPI_VictorSPX m_leftLeader;
@@ -44,6 +53,7 @@ public class TankDriveSubsystem extends SubsystemBase {
     private final DifferentialDrive m_drive;
     private final Field2d m_field = new Field2d();
     private final ADXRS450_Gyro m_gyro = new ADXRS450_Gyro(SPI.Port.kMXP);
+    private boolean gyroCalibrated = true;
     // Telemetry Trackers
     private final Pose2d m_robotPose = new Pose2d(); // Storage variable for our tracking state
     // Gyro Stablized Drive
@@ -147,6 +157,10 @@ public class TankDriveSubsystem extends SubsystemBase {
 
         // 2. Update field visualizer coordinate tracker
         m_field.setRobotPose(m_odometry.getPoseMeters());
+
+        m_gyro.isConnected();
+
+        gyroOnline.set(m_gyro.isConnected());
     }
 
     private void ResetPose(Pose2d pose) {
@@ -260,6 +274,11 @@ public class TankDriveSubsystem extends SubsystemBase {
     public Command arcadeDriveCommand(DoubleSupplier speed, DoubleSupplier rotation) {
         return this.runEnd(
                 () -> {
+                    if(!gyroCalibrated) {
+                        m_drive.arcadeDrive(0.0, 0.0);
+                        return;
+                    }
+
                     if (config.getDirectionCorrection()) {
                         double xSpeed = speed.getAsDouble();
                         double joystickTurnInput = rotation.getAsDouble();
@@ -275,8 +294,6 @@ public class TankDriveSubsystem extends SubsystemBase {
 
                             // Get the robot's actual turning rate from the gyro
                             double currentTurnRate = -m_gyro.getRate();
-
-                            DebugUtil.Publish("GyroTurn", currentTurnRate);
 
                             // The PID calculates a motor correction value (-1.0 to 1.0) to achieve that rate
                             if(xSpeed > 0.0) {
@@ -299,5 +316,46 @@ public class TankDriveSubsystem extends SubsystemBase {
 
     public Command stopCommand() {
         return this.runOnce(this::stop);
+    }
+
+    public Command runGyroCalibration() {
+        return new GyroCalibration(this);
+    }
+
+    public class GyroCalibration extends Command {
+        private CompletableFuture<Void> asyncTask;
+
+        public GyroCalibration(Subsystem subsystem) {
+            addRequirements(subsystem);
+        }
+
+        @Override
+        public void initialize() {
+            // Start the function asynchronously on a background thread
+            asyncTask = CompletableFuture.runAsync(() -> {
+                // Long-running or async logic here
+                gyroCalibrated = false;
+                gyroCalibrating.set(true);
+                m_gyro.calibrate();
+                gyroCalibrating.set(false);
+                gyroCalibrated = true;
+            });
+        }
+
+        @Override
+        public boolean isFinished() {
+            // Keep the command alive until the async task completes (optional)
+            return asyncTask != null && asyncTask.isDone();
+        }
+
+        /**
+         * @param interrupted
+         */
+        @Override
+        public void end(boolean interrupted) {
+            if (interrupted && asyncTask != null) {
+                asyncTask.cancel(true);
+            }
+        }
     }
 }
